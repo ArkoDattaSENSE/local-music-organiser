@@ -11,7 +11,12 @@ import com.audoneout.app.data.LibraryRepository
 import com.audoneout.app.data.MusicRootEntity
 import com.audoneout.app.data.TrackEntity
 import com.audoneout.app.domain.LibraryHealth
+import com.audoneout.app.domain.PlaylistCandidate
+import com.audoneout.app.domain.PlaylistRules
 import com.audoneout.app.domain.ScanProgress
+import com.audoneout.app.playlist.LibrarySummary
+import com.audoneout.app.playlist.LocalRuleBasedPromptInterpreter
+import com.audoneout.app.playlist.PlaylistGenerator
 import com.audoneout.app.settings.AppSettings
 import com.audoneout.app.settings.SettingsState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +51,10 @@ data class MainUiState(
     val scanProgress: ScanProgress = ScanProgress(estimatedRemainingWork = "Ready"),
     val settings: SettingsState = SettingsState(),
     val health: LibraryHealth = LibraryHealth(score = 100, issueCount = 0, duplicateCandidates = 0, missingMetadata = 0),
+    val mixtapePrompt: String = "Make a rainy Kolkata evening mixtape without repeating artists",
+    val mixtapeRules: PlaylistRules? = null,
+    val mixtapeCandidates: List<PlaylistCandidate> = emptyList(),
+    val mixtapeMessage: String = "Describe the mood, duration, folders, languages, genres, or formats.",
     val nowPlayingTitle: String = "Nothing playing",
     val scanMessage: String = "Choose music access, then scan your local library.",
     val busy: Boolean = false
@@ -93,10 +102,19 @@ private data class LibraryContentBundle(
     val folders: List<FolderEntity>
 )
 
+private data class MixtapeUiBundle(
+    val prompt: String,
+    val rules: PlaylistRules?,
+    val candidates: List<PlaylistCandidate>,
+    val message: String
+)
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val repository: LibraryRepository,
-    private val settings: AppSettings
+    private val settings: AppSettings,
+    private val promptInterpreter: LocalRuleBasedPromptInterpreter,
+    private val playlistGenerator: PlaylistGenerator
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -106,6 +124,10 @@ class MainViewModel @Inject constructor(
     private val _librarySort = MutableStateFlow(LibrarySort.Title)
     private val _libraryQuery = MutableStateFlow("")
     private val _libraryGridMode = MutableStateFlow(false)
+    private val _mixtapePrompt = MutableStateFlow("Make a rainy Kolkata evening mixtape without repeating artists")
+    private val _mixtapeRules = MutableStateFlow<PlaylistRules?>(null)
+    private val _mixtapeCandidates = MutableStateFlow<List<PlaylistCandidate>>(emptyList())
+    private val _mixtapeMessage = MutableStateFlow("Describe the mood, duration, folders, languages, genres, or formats.")
 
     init {
         viewModelScope.launch {
@@ -182,8 +204,24 @@ class MainViewModel @Inject constructor(
                 )
             }
 
-            combine(stateWithoutHealth, _health, _busy) { state, health, busy ->
-                state.copy(health = health, busy = busy)
+            val mixtapeBundle = combine(
+                _mixtapePrompt,
+                _mixtapeRules,
+                _mixtapeCandidates,
+                _mixtapeMessage
+            ) { prompt, rules, candidates, message ->
+                MixtapeUiBundle(prompt, rules, candidates, message)
+            }
+
+            combine(stateWithoutHealth, _health, _busy, mixtapeBundle) { state, health, busy, mixtape ->
+                state.copy(
+                    health = health,
+                    busy = busy,
+                    mixtapePrompt = mixtape.prompt,
+                    mixtapeRules = mixtape.rules,
+                    mixtapeCandidates = mixtape.candidates,
+                    mixtapeMessage = mixtape.message
+                )
             }.collect { state ->
                 _uiState.value = state
             }
@@ -272,6 +310,48 @@ class MainViewModel @Inject constructor(
 
     fun toggleLibraryGridMode() {
         _libraryGridMode.value = !_libraryGridMode.value
+    }
+
+    fun setMixtapePrompt(prompt: String) {
+        _mixtapePrompt.value = prompt
+    }
+
+    fun generateMixtape() {
+        viewModelScope.launch {
+            _busy.value = true
+            val tracks = repository.availableTracksOnce()
+            if (tracks.isEmpty()) {
+                _mixtapeRules.value = null
+                _mixtapeCandidates.value = emptyList()
+                _mixtapeMessage.value = "Scan music first, then AudOneOut can generate a local mixtape."
+                _busy.value = false
+                return@launch
+            }
+            val summary = LibrarySummary(
+                genres = tracks.map { it.genre }.filter { it.isNotBlank() }.distinct(),
+                languages = tracks.map { it.language }.filter { it.isNotBlank() }.distinct(),
+                folders = tracks.map { it.folder }.filter { it.isNotBlank() }.distinct(),
+                formats = tracks.map { it.format.ifBlank { it.mimeType.substringAfterLast('/') } }.filter { it.isNotBlank() }.distinct(),
+                trackCount = tracks.size
+            )
+            promptInterpreter.interpret(_mixtapePrompt.value, summary)
+                .onSuccess { rules ->
+                    _mixtapeRules.value = rules
+                    val candidates = playlistGenerator.generate(tracks, rules)
+                    _mixtapeCandidates.value = candidates
+                    _mixtapeMessage.value = if (candidates.isEmpty()) {
+                        "No local tracks matched those rules. Try loosening the prompt."
+                    } else {
+                        "${candidates.size} tracks selected locally from ${tracks.size} indexed tracks."
+                    }
+                }
+                .onFailure { error ->
+                    _mixtapeRules.value = null
+                    _mixtapeCandidates.value = emptyList()
+                    _mixtapeMessage.value = error.message ?: "Could not interpret this prompt."
+                }
+            _busy.value = false
+        }
     }
 
     fun setAutomaticLibraryChecking(enabled: Boolean) {

@@ -172,6 +172,9 @@ class LibraryRepository @Inject constructor(
         return LibraryHealth(score, issueCount, duplicateCandidates, missing)
     }
 
+    suspend fun availableTracksOnce(): List<TrackEntity> =
+        dao.getAllTracksOnce().filter { it.availability == "Available" && it.enhancementStatus != "Excluded" }
+
     suspend fun runLibraryDoctor(): LibraryHealth {
         val availableTracks = dao.getAllTracksOnce().filter { it.availability == "Available" }
         val issues = doctor.analyse(availableTracks)

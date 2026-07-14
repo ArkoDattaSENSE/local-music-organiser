@@ -83,6 +83,7 @@ import com.audoneout.app.data.FolderBlacklistRuleEntity
 import com.audoneout.app.data.FolderEntity
 import com.audoneout.app.data.MusicRootEntity
 import com.audoneout.app.data.TrackEntity
+import com.audoneout.app.domain.PlaylistCandidate
 import com.audoneout.app.scan.MediaStoreChangeObserver
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -121,6 +122,7 @@ private sealed class AppDestination(
     data object Player : AppDestination("player", "Player", UiIcon.Player)
     data object Inbox : AppDestination("inbox", "Inbox", UiIcon.Inbox)
     data object Settings : AppDestination("settings", "Settings", UiIcon.Settings)
+    data object Mixtape : AppDestination("mixtape", "Create Mixtape", UiIcon.Mixtape)
 }
 
 private enum class UiIcon {
@@ -161,12 +163,17 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
     val selected = bottomDestinations.firstOrNull { destination ->
         currentDestination?.hierarchy?.any { it.route == destination.route } == true
     } ?: AppDestination.Home
+    val title = if (currentDestination?.route == AppDestination.Mixtape.route) {
+        AppDestination.Mixtape.label
+    } else {
+        selected.label
+    }
 
     Scaffold(
-        topBar = { AudOneOutTopBar(selected.label) },
+        topBar = { AudOneOutTopBar(title) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate(AppDestination.Inbox.route) },
+                onClick = { navController.navigate(AppDestination.Mixtape.route) },
                 containerColor = AudOneOutColors.accentCoral,
                 contentColor = Color.White
             ) {
@@ -242,6 +249,13 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                     onNotifyWhenNewTracksReadyChange = viewModel::setNotifyWhenNewTracksReady,
                     onQuietBackgroundModeChange = viewModel::setQuietBackgroundMode,
                     onOnlineEnrichmentEnabledChange = viewModel::setOnlineEnrichmentEnabled
+                )
+            }
+            composable(AppDestination.Mixtape.route) {
+                MixtapeScreen(
+                    uiState = uiState,
+                    onPromptChange = viewModel::setMixtapePrompt,
+                    onGenerate = viewModel::generateMixtape
                 )
             }
         }
@@ -479,6 +493,49 @@ private fun InboxScreen(uiState: MainUiState, onHealthCheck: () -> Unit) {
 }
 
 @Composable
+private fun MixtapeScreen(
+    uiState: MainUiState,
+    onPromptChange: (String) -> Unit,
+    onGenerate: () -> Unit
+) {
+    ScreenFrame {
+        SectionTitle("Create Mixtape")
+        CardPanel {
+            Text("Prompt", color = AudOneOutColors.textPrimary, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = uiState.mixtapePrompt,
+                onValueChange = onPromptChange,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                label = { Text("Describe the mix") }
+            )
+            Text(uiState.mixtapeMessage, color = AudOneOutColors.textSecondary)
+            Button(onClick = onGenerate, enabled = !uiState.busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Generate Locally")
+            }
+        }
+        uiState.mixtapeRules?.let { rules ->
+            SectionTitle("Interpreted Rules")
+            CardPanel {
+                RuleLine("Duration", rules.targetDurationMinutes?.let { "$it min" } ?: "Flexible")
+                RuleLine("Formats", rules.fileFormats.ifEmpty { listOf("Any") }.joinToString())
+                RuleLine("Genres", rules.includedGenres.ifEmpty { listOf("Any") }.joinToString())
+                RuleLine("Languages", rules.languages.ifEmpty { listOf("Any") }.joinToString())
+                RuleLine("Folders", rules.folders.ifEmpty { listOf("Any") }.joinToString())
+                RuleLine("Avoid repeat artists", if (rules.avoidArtistRepetitions) "Yes" else "No")
+                RuleLine("Familiarity", rules.familiarityLevel ?: "Balanced")
+            }
+        }
+        if (uiState.mixtapeCandidates.isNotEmpty()) {
+            SectionTitle("Selected Tracks")
+            uiState.mixtapeCandidates.take(40).forEach { candidate ->
+                PlaylistCandidateRow(candidate)
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsScreen(
     uiState: MainUiState,
     onScan: () -> Unit,
@@ -690,6 +747,33 @@ private fun AnalysisResultRow(result: AnalysisResultEntity) {
         result.issueType,
         "${result.severity.uppercase()} - ${result.explanation}"
     )
+}
+
+@Composable
+private fun RuleLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = AudOneOutColors.textMuted)
+        Text(value, color = AudOneOutColors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun PlaylistCandidateRow(candidate: PlaylistCandidate) {
+    CardPanel {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            SymbolBadge(UiIcon.Mixtape, candidate.track.title)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(candidate.track.title.ifBlank { candidate.track.fileName }, color = AudOneOutColors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${candidate.track.artist} - ${candidate.track.album}", color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(formatDuration(candidate.track.durationMs), color = AudOneOutColors.textMuted)
+        }
+        Text(candidate.reasons.joinToString(" + "), color = AudOneOutColors.textSecondary, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable
