@@ -16,8 +16,12 @@ object BlacklistMatcher {
         "Ringtones",
         "Notifications",
         "Alarms",
+        "Podcasts",
+        "Audiobooks",
         "Audio_Lab",
-        "Dolby records"
+        "Dolby records",
+        ".thumbnails",
+        "cache"
     ).map { name ->
         FolderBlacklistRuleEntity(
             label = name,
@@ -50,4 +54,3 @@ object BlacklistMatcher {
         return regex.containsMatchIn(value)
     }
 }
-

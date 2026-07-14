@@ -227,6 +227,24 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun setBlacklistRuleEnabled(ruleId: Long, enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setBlacklistRuleEnabled(ruleId, enabled)
+        }
+    }
+
+    fun deleteBlacklistRule(ruleId: Long) {
+        viewModelScope.launch {
+            repository.deleteBlacklistRule(ruleId)
+        }
+    }
+
+    fun restoreDefaultBlacklist() {
+        viewModelScope.launch {
+            repository.restoreDefaultBlacklist()
+        }
+    }
+
     fun setLibraryView(view: LibraryView) {
         _libraryView.value = view
     }

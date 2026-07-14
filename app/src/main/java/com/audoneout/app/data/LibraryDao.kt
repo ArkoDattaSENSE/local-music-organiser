@@ -57,6 +57,9 @@ interface LibraryDao {
     @Query("SELECT * FROM folder_blacklist_rules WHERE enabled = 1")
     suspend fun getEnabledBlacklistRules(): List<FolderBlacklistRuleEntity>
 
+    @Query("SELECT * FROM folder_blacklist_rules")
+    suspend fun getAllBlacklistRulesOnce(): List<FolderBlacklistRuleEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTrack(track: TrackEntity): Long
 
@@ -98,6 +101,15 @@ interface LibraryDao {
 
     @Query("UPDATE tracks SET availability = :availability, enhancementStatus = :enhancementStatus WHERE id = :trackId")
     suspend fun updateTrackState(trackId: Long, availability: String, enhancementStatus: String)
+
+    @Query("UPDATE folder_blacklist_rules SET enabled = :enabled WHERE id = :ruleId")
+    suspend fun updateBlacklistRuleEnabled(ruleId: Long, enabled: Boolean)
+
+    @Query("UPDATE folder_blacklist_rules SET excludedPreviewCount = :count WHERE id = :ruleId")
+    suspend fun updateBlacklistPreviewCount(ruleId: Long, count: Int)
+
+    @Query("DELETE FROM folder_blacklist_rules WHERE id = :ruleId")
+    suspend fun deleteBlacklistRule(ruleId: Long)
 
     @Query("UPDATE music_roots SET included = :included WHERE id = :rootId")
     suspend fun updateMusicRootIncluded(rootId: Long, included: Boolean)

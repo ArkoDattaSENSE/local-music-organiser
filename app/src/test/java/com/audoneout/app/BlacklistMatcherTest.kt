@@ -16,5 +16,24 @@ class BlacklistMatcherTest {
         assertTrue(BlacklistMatcher.isExcluded("Music/whatsapp audio/song.mp3", rules))
         assertFalse(BlacklistMatcher.isExcluded("Music/Albums/song.mp3", rules))
     }
-}
 
+    @Test
+    fun defaultSuggestionsCoverBriefExclusions() {
+        val defaultPatterns = BlacklistMatcher.defaultRules.map { it.pattern.lowercase() }
+
+        assertTrue("podcasts" in defaultPatterns)
+        assertTrue("audiobooks" in defaultPatterns)
+        assertTrue(".thumbnails" in defaultPatterns)
+        assertTrue("cache" in defaultPatterns)
+    }
+
+    @Test
+    fun matchesPathPatternsWithWildcards() {
+        val rules = listOf(
+            FolderBlacklistRuleEntity(label = "App cache", pattern = "Android/*/cache", matchType = BlacklistMatcher.PATH_PATTERN)
+        )
+
+        assertTrue(BlacklistMatcher.isExcluded("Android/data/cache/song.mp3", rules))
+        assertFalse(BlacklistMatcher.isExcluded("Music/data/cache/song.mp3", rules))
+    }
+}

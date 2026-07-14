@@ -43,9 +43,10 @@ class LibraryRepository @Inject constructor(
     val blacklistRules: Flow<List<FolderBlacklistRuleEntity>> = dao.observeBlacklistRules()
 
     suspend fun ensureDefaultBlacklist() {
-        if (dao.getEnabledBlacklistRules().isEmpty()) {
+        if (dao.getAllBlacklistRulesOnce().isEmpty()) {
             dao.upsertBlacklistRules(BlacklistMatcher.defaultRules)
         }
+        refreshBlacklistPreviewCounts()
     }
 
     suspend fun addMusicRoot(displayName: String, uri: String, location: String = uri) {
@@ -75,6 +76,28 @@ class LibraryRepository @Inject constructor(
                 matchType = BlacklistMatcher.FOLDER_NAME
             )
         )
+        refreshBlacklistPreviewCounts()
+    }
+
+    suspend fun setBlacklistRuleEnabled(ruleId: Long, enabled: Boolean) {
+        dao.updateBlacklistRuleEnabled(ruleId, enabled)
+    }
+
+    suspend fun deleteBlacklistRule(ruleId: Long) {
+        dao.deleteBlacklistRule(ruleId)
+    }
+
+    suspend fun restoreDefaultBlacklist() {
+        val existingKeys = dao.getAllBlacklistRulesOnce()
+            .map { "${it.matchType}|${it.pattern.lowercase()}" }
+            .toSet()
+        val missingDefaults = BlacklistMatcher.defaultRules.filter { rule ->
+            "${rule.matchType}|${rule.pattern.lowercase()}" !in existingKeys
+        }
+        if (missingDefaults.isNotEmpty()) {
+            dao.upsertBlacklistRules(missingDefaults)
+        }
+        refreshBlacklistPreviewCounts()
     }
 
     suspend fun scanMediaStore() {
@@ -151,6 +174,7 @@ class LibraryRepository @Inject constructor(
     suspend fun refreshLibraryFacets() {
         val facets = LibraryFacetBuilder.build(dao.getAllTracksOnce())
         dao.replaceLibraryFacets(facets.albums, facets.artists, facets.folders)
+        refreshBlacklistPreviewCounts()
     }
 
     private suspend fun scanRootInternal(
@@ -172,5 +196,16 @@ class LibraryRepository @Inject constructor(
             storageBytes = tracksForRoot.sumOf { it.sizeBytes }
         )
         return finalProgress
+    }
+
+    private suspend fun refreshBlacklistPreviewCounts() {
+        val tracks = dao.getAllTracksOnce()
+        dao.getAllBlacklistRulesOnce().forEach { rule ->
+            val previewRule = rule.copy(enabled = true)
+            val excludedCount = tracks.count { track ->
+                BlacklistMatcher.isExcluded(track.relativePath, listOf(previewRule))
+            }
+            dao.updateBlacklistPreviewCount(rule.id, excludedCount)
+        }
     }
 }

@@ -46,6 +46,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -224,7 +230,10 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                     onRootIncludedChange = viewModel::setRootIncluded,
                     onRescanRoot = viewModel::rescanRoot,
                     onRemoveRoot = viewModel::removeRoot,
-                    onAddRule = viewModel::addBlacklistRule
+                    onAddRule = viewModel::addBlacklistRule,
+                    onRuleEnabledChange = viewModel::setBlacklistRuleEnabled,
+                    onDeleteRule = viewModel::deleteBlacklistRule,
+                    onRestoreDefaultRules = viewModel::restoreDefaultBlacklist
                 )
             }
         }
@@ -453,9 +462,13 @@ private fun SettingsScreen(
     onRootIncludedChange: (Long, Boolean) -> Unit,
     onRescanRoot: (Long) -> Unit,
     onRemoveRoot: (Long) -> Unit,
-    onAddRule: (String) -> Unit
+    onAddRule: (String) -> Unit,
+    onRuleEnabledChange: (Long, Boolean) -> Unit,
+    onDeleteRule: (Long) -> Unit,
+    onRestoreDefaultRules: () -> Unit
 ) {
     val context = LocalContext.current
+    var typedRule by remember { mutableStateOf("") }
     val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -492,11 +505,39 @@ private fun SettingsScreen(
         }
         PermissionScanPanel(onScan)
         SectionTitle("Folder Blacklist")
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { onAddRule("Podcasts") }) { Text("Add Podcasts") }
-            OutlinedButton(onClick = { onAddRule("Audiobooks") }) { Text("Add Audiobooks") }
+        CardPanel {
+            Text("Excluded folders", color = AudOneOutColors.textPrimary, fontWeight = FontWeight.Bold)
+            Text("Blacklisting only removes tracks from AudOneOut's working library. It never deletes files.", color = AudOneOutColors.textSecondary)
+            OutlinedTextField(
+                value = typedRule,
+                onValueChange = { typedRule = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Folder name rule") }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        val rule = typedRule.trim()
+                        if (rule.isNotBlank()) {
+                            onAddRule(rule)
+                            typedRule = ""
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Add Rule") }
+                OutlinedButton(onClick = onRestoreDefaultRules, modifier = Modifier.weight(1f)) {
+                    Text("Restore Defaults")
+                }
+            }
         }
-        uiState.blacklistRules.take(12).forEach { BlacklistRuleRow(it) }
+        uiState.blacklistRules.take(24).forEach { rule ->
+            BlacklistRuleRow(
+                rule = rule,
+                onEnabledChange = { enabled -> onRuleEnabledChange(rule.id, enabled) },
+                onDelete = { onDeleteRule(rule.id) }
+            )
+        }
         SectionTitle("Background Checks")
         ToggleRow("Automatic library checking", uiState.settings.automaticLibraryChecking)
         ToggleRow("Wi-Fi only for online enrichment", uiState.settings.wifiOnlyOnlineEnrichment)
@@ -646,8 +687,25 @@ private fun MusicRootRow(
 }
 
 @Composable
-private fun BlacklistRuleRow(rule: FolderBlacklistRuleEntity) {
-    FeatureRow(if (rule.enabled) UiIcon.BlacklistOn else UiIcon.BlacklistOff, rule.label, "${rule.matchType}: ${rule.pattern} - excludes ${rule.excludedPreviewCount}")
+private fun BlacklistRuleRow(
+    rule: FolderBlacklistRuleEntity,
+    onEnabledChange: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    CardPanel {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            SymbolBadge(if (rule.enabled) UiIcon.BlacklistOn else UiIcon.BlacklistOff, rule.label)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(rule.label, color = AudOneOutColors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${rule.matchType}: ${rule.pattern}", color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Switch(checked = rule.enabled, onCheckedChange = onEnabledChange)
+        }
+        Text("Preview: ${rule.excludedPreviewCount} indexed tracks match this rule", color = AudOneOutColors.textSecondary)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onDelete) { Text("Delete") }
+        }
+    }
 }
 
 @Composable
