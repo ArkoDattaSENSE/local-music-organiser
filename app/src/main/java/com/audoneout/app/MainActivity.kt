@@ -1,6 +1,8 @@
 package com.audoneout.app
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -59,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -214,7 +217,15 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                 InboxScreen(uiState)
             }
             composable(AppDestination.Settings.route) {
-                SettingsScreen(uiState, onScan = viewModel::scanLibrary, onAddRule = viewModel::addBlacklistRule)
+                SettingsScreen(
+                    uiState = uiState,
+                    onScan = viewModel::scanLibrary,
+                    onAddRoot = viewModel::addRoot,
+                    onRootIncludedChange = viewModel::setRootIncluded,
+                    onRescanRoot = viewModel::rescanRoot,
+                    onRemoveRoot = viewModel::removeRoot,
+                    onAddRule = viewModel::addBlacklistRule
+                )
             }
         }
     }
@@ -438,14 +449,46 @@ private fun InboxScreen(uiState: MainUiState) {
 private fun SettingsScreen(
     uiState: MainUiState,
     onScan: () -> Unit,
+    onAddRoot: (String, String, String) -> Unit,
+    onRootIncludedChange: (Long, Boolean) -> Unit,
+    onRescanRoot: (Long) -> Unit,
+    onRemoveRoot: (Long) -> Unit,
     onAddRule: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            val root = uri.toMusicRootSelection()
+            onAddRoot(root.displayName, root.uri, root.location)
+        }
+    }
     ScreenFrame {
         SectionTitle("Music Roots")
+        CardPanel {
+            Text("Scan scope", color = AudOneOutColors.textPrimary, fontWeight = FontWeight.Bold)
+            Text("Pick the folders that contain your music. AudOneOut stores read access and never requests all-files storage.", color = AudOneOutColors.textSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = { rootPicker.launch(null) }) { Text("Add Root") }
+                OutlinedButton(onClick = onScan) { Text("Scan Included") }
+            }
+        }
         if (uiState.roots.isEmpty()) {
-            EmptyState(UiIcon.Root, "No roots selected", "Use Android's folder picker in the next slice; current scans use MediaStore audio safely.")
+            EmptyState(UiIcon.Root, "No roots selected", "If you scan now, AudOneOut uses MediaStore audio. Add roots to narrow future scans.")
         } else {
-            uiState.roots.forEach { MusicRootRow(it) }
+            uiState.roots.forEach { root ->
+                MusicRootRow(
+                    root = root,
+                    onIncludedChange = { included -> onRootIncludedChange(root.id, included) },
+                    onRescan = { onRescanRoot(root.id) },
+                    onRemove = { onRemoveRoot(root.id) }
+                )
+            }
         }
         PermissionScanPanel(onScan)
         SectionTitle("Folder Blacklist")
@@ -575,8 +618,31 @@ private fun <T> TwoColumnGrid(items: List<T>, itemContent: @Composable (T) -> Un
 }
 
 @Composable
-private fun MusicRootRow(root: MusicRootEntity) {
-    FeatureRow(UiIcon.Root, root.displayName, "${root.indexedTrackCount} tracks - ${root.scanStatus}")
+private fun MusicRootRow(
+    root: MusicRootEntity,
+    onIncludedChange: (Boolean) -> Unit,
+    onRescan: () -> Unit,
+    onRemove: () -> Unit
+) {
+    CardPanel {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            SymbolBadge(UiIcon.Root, root.displayName)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(root.displayName, color = AudOneOutColors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(root.location.ifBlank { root.uri }, color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Switch(checked = root.included, onCheckedChange = onIncludedChange)
+        }
+        Text(
+            "${root.indexedTrackCount} tracks - ${formatBytes(root.storageBytes)} - ${root.scanStatus} - ${formatRelativeTimestamp(root.lastScanTimeMillis)}",
+            color = AudOneOutColors.textSecondary,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onRescan, enabled = root.included) { Text("Rescan") }
+            OutlinedButton(onClick = onRemove) { Text("Remove") }
+        }
+    }
 }
 
 @Composable
@@ -862,6 +928,36 @@ private fun formatBytes(bytes: Long): String {
     } else {
         "%.1f %s".format(value, units[unitIndex])
     }
+}
+
+private fun formatRelativeTimestamp(timestampMillis: Long): String {
+    if (timestampMillis <= 0L) return "Never scanned"
+    val elapsedMinutes = ((System.currentTimeMillis() - timestampMillis).coerceAtLeast(0L) / 60_000L).toInt()
+    return when {
+        elapsedMinutes < 1 -> "Scanned just now"
+        elapsedMinutes < 60 -> "Scanned ${elapsedMinutes}m ago"
+        elapsedMinutes < 1_440 -> "Scanned ${elapsedMinutes / 60}h ago"
+        else -> "Scanned ${elapsedMinutes / 1_440}d ago"
+    }
+}
+
+private data class MusicRootSelection(
+    val displayName: String,
+    val uri: String,
+    val location: String
+)
+
+private fun Uri.toMusicRootSelection(): MusicRootSelection {
+    val rawPath = lastPathSegment.orEmpty()
+        .substringAfter(':', missingDelimiterValue = lastPathSegment.orEmpty())
+        .trim('/')
+    val displayName = rawPath.substringAfterLast('/').ifBlank { "Music root" }
+    val location = rawPath.takeIf { it.isNotBlank() }?.let { "$it/" }.orEmpty()
+    return MusicRootSelection(
+        displayName = displayName,
+        uri = toString(),
+        location = location
+    )
 }
 
 private val LibrarySort.label: String

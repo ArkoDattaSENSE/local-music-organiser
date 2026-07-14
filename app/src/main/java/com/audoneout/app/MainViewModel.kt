@@ -194,9 +194,30 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun addRoot(displayName: String, uri: String) {
+    fun addRoot(displayName: String, uri: String, location: String = uri) {
         viewModelScope.launch {
-            repository.addMusicRoot(displayName, uri)
+            repository.addMusicRoot(displayName, uri, location)
+        }
+    }
+
+    fun setRootIncluded(rootId: Long, included: Boolean) {
+        viewModelScope.launch {
+            repository.setMusicRootIncluded(rootId, included)
+        }
+    }
+
+    fun rescanRoot(rootId: Long) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { repository.scanMusicRoot(rootId) }
+            _health.value = repository.currentHealth()
+            _busy.value = false
+        }
+    }
+
+    fun removeRoot(rootId: Long) {
+        viewModelScope.launch {
+            repository.removeMusicRoot(rootId)
         }
     }
 

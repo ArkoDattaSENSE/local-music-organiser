@@ -42,6 +42,12 @@ interface LibraryDao {
     @Query("SELECT * FROM music_roots ORDER BY displayName COLLATE NOCASE")
     fun observeMusicRoots(): Flow<List<MusicRootEntity>>
 
+    @Query("SELECT * FROM music_roots ORDER BY displayName COLLATE NOCASE")
+    suspend fun observeMusicRootsOnce(): List<MusicRootEntity>
+
+    @Query("SELECT * FROM music_roots WHERE id = :rootId LIMIT 1")
+    suspend fun findMusicRoot(rootId: Long): MusicRootEntity?
+
     @Query("SELECT * FROM tracks WHERE mediaStoreId = :mediaStoreId LIMIT 1")
     suspend fun findTrackByMediaStoreId(mediaStoreId: Long): TrackEntity?
 
@@ -92,6 +98,21 @@ interface LibraryDao {
 
     @Query("UPDATE tracks SET availability = :availability, enhancementStatus = :enhancementStatus WHERE id = :trackId")
     suspend fun updateTrackState(trackId: Long, availability: String, enhancementStatus: String)
+
+    @Query("UPDATE music_roots SET included = :included WHERE id = :rootId")
+    suspend fun updateMusicRootIncluded(rootId: Long, included: Boolean)
+
+    @Query("UPDATE music_roots SET scanStatus = :scanStatus, lastScanTimeMillis = :lastScanTimeMillis, indexedTrackCount = :indexedTrackCount, storageBytes = :storageBytes WHERE id = :rootId")
+    suspend fun updateMusicRootScanSummary(
+        rootId: Long,
+        scanStatus: String,
+        lastScanTimeMillis: Long,
+        indexedTrackCount: Int,
+        storageBytes: Long
+    )
+
+    @Query("DELETE FROM music_roots WHERE id = :rootId")
+    suspend fun deleteMusicRoot(rootId: Long)
 
     @Query("UPDATE scan_jobs SET status = :status, finishedAtMillis = :finishedAtMillis, tracksFound = :tracksFound, newTracks = :newTracks, updatedTracks = :updatedTracks, excludedTracks = :excludedTracks, failedTracks = :failedTracks WHERE id = :scanJobId")
     suspend fun finishScanJob(

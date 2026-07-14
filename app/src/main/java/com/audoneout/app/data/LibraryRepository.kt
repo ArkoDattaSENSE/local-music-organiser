@@ -59,6 +59,14 @@ class LibraryRepository @Inject constructor(
         )
     }
 
+    suspend fun setMusicRootIncluded(rootId: Long, included: Boolean) {
+        dao.updateMusicRootIncluded(rootId, included)
+    }
+
+    suspend fun removeMusicRoot(rootId: Long) {
+        dao.deleteMusicRoot(rootId)
+    }
+
     suspend fun addFolderNameRule(name: String) {
         dao.upsertBlacklistRule(
             FolderBlacklistRuleEntity(
@@ -72,6 +80,7 @@ class LibraryRepository @Inject constructor(
     suspend fun scanMediaStore() {
         ensureDefaultBlacklist()
         val rules = dao.getEnabledBlacklistRules()
+        val includedRoots = dao.observeMusicRootsOnce().filter { it.included }
         val jobId = dao.insertScanJob(
             ScanJobEntity(
                 type = "FullMediaStore",
@@ -80,10 +89,28 @@ class LibraryRepository @Inject constructor(
             )
         )
         var finalProgress = ScanProgress()
-        scanner.scanAudio(rules).collect { result ->
-            finalProgress = result.progress
-            _scanProgress.value = result.progress
-            dao.upsertTracks(result.tracks)
+        if (includedRoots.isEmpty()) {
+            scanner.scanAudio(rules).collect { result ->
+                finalProgress = result.progress
+                _scanProgress.value = result.progress
+                dao.upsertTracks(result.tracks)
+            }
+        } else {
+            var aggregateProgress = ScanProgress(estimatedRemainingWork = "Scanning included roots")
+            includedRoots.forEach { root ->
+                val rootProgress = scanRootInternal(root, rules)
+                aggregateProgress = aggregateProgress.copy(
+                    currentRoot = root.displayName,
+                    currentFolder = rootProgress.currentFolder,
+                    tracksFound = aggregateProgress.tracksFound + rootProgress.tracksFound,
+                    newTracks = aggregateProgress.newTracks + rootProgress.newTracks,
+                    updatedTracks = aggregateProgress.updatedTracks + rootProgress.updatedTracks,
+                    excludedTracks = aggregateProgress.excludedTracks + rootProgress.excludedTracks,
+                    failedTracks = aggregateProgress.failedTracks + rootProgress.failedTracks,
+                    estimatedRemainingWork = "Scanning included roots"
+                )
+                finalProgress = aggregateProgress
+            }
         }
         refreshLibraryFacets()
         dao.finishScanJob(
@@ -97,6 +124,14 @@ class LibraryRepository @Inject constructor(
             failedTracks = finalProgress.failedTracks
         )
         _scanProgress.value = finalProgress.copy(estimatedRemainingWork = "Last scan complete")
+    }
+
+    suspend fun scanMusicRoot(rootId: Long) {
+        ensureDefaultBlacklist()
+        val root = dao.findMusicRoot(rootId) ?: return
+        val rules = dao.getEnabledBlacklistRules()
+        scanRootInternal(root, rules)
+        refreshLibraryFacets()
     }
 
     suspend fun currentHealth(): LibraryHealth {
@@ -116,5 +151,26 @@ class LibraryRepository @Inject constructor(
     suspend fun refreshLibraryFacets() {
         val facets = LibraryFacetBuilder.build(dao.getAllTracksOnce())
         dao.replaceLibraryFacets(facets.albums, facets.artists, facets.folders)
+    }
+
+    private suspend fun scanRootInternal(
+        root: MusicRootEntity,
+        rules: List<FolderBlacklistRuleEntity>
+    ): ScanProgress {
+        var finalProgress = ScanProgress(currentRoot = root.displayName, estimatedRemainingWork = "Queued")
+        scanner.scanAudio(rules, rootFilter = root.location).collect { result ->
+            finalProgress = result.progress.copy(currentRoot = root.displayName)
+            _scanProgress.value = finalProgress
+            dao.upsertTracks(result.tracks.map { it.copy(rootId = root.id) })
+        }
+        val tracksForRoot = dao.getAllTracksOnce().filter { it.rootId == root.id && it.availability == "Available" }
+        dao.updateMusicRootScanSummary(
+            rootId = root.id,
+            scanStatus = "Complete",
+            lastScanTimeMillis = System.currentTimeMillis(),
+            indexedTrackCount = tracksForRoot.size,
+            storageBytes = tracksForRoot.sumOf { it.sizeBytes }
+        )
+        return finalProgress
     }
 }
