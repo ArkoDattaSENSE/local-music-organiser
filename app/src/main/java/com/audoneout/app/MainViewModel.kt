@@ -273,6 +273,34 @@ class MainViewModel @Inject constructor(
     fun toggleLibraryGridMode() {
         _libraryGridMode.value = !_libraryGridMode.value
     }
+
+    fun setAutomaticLibraryChecking(enabled: Boolean) {
+        viewModelScope.launch { settings.setAutomaticLibraryChecking(enabled) }
+    }
+
+    fun setWifiOnlyOnlineEnrichment(enabled: Boolean) {
+        viewModelScope.launch { settings.setWifiOnlyOnlineEnrichment(enabled) }
+    }
+
+    fun setEnhanceNewTracksAutomatically(enabled: Boolean) {
+        viewModelScope.launch { settings.setEnhanceNewTracksAutomatically(enabled) }
+    }
+
+    fun setAnalyseOnlyWhileCharging(enabled: Boolean) {
+        viewModelScope.launch { settings.setAnalyseOnlyWhileCharging(enabled) }
+    }
+
+    fun setNotifyWhenNewTracksReady(enabled: Boolean) {
+        viewModelScope.launch { settings.setNotifyWhenNewTracksReady(enabled) }
+    }
+
+    fun setQuietBackgroundMode(enabled: Boolean) {
+        viewModelScope.launch { settings.setQuietBackgroundMode(enabled) }
+    }
+
+    fun setOnlineEnrichmentEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setOnlineEnrichmentEnabled(enabled) }
+    }
 }
 
 private fun List<TrackEntity>.filterAndSortTracks(query: String, sort: LibrarySort): List<TrackEntity> {

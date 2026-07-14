@@ -55,5 +55,28 @@ class AppSettings @Inject constructor(
     suspend fun setAutomaticLibraryChecking(enabled: Boolean) {
         context.dataStore.edit { it[Keys.automaticLibraryChecking] = enabled }
     }
-}
 
+    suspend fun setWifiOnlyOnlineEnrichment(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.wifiOnlyOnlineEnrichment] = enabled }
+    }
+
+    suspend fun setEnhanceNewTracksAutomatically(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.enhanceNewTracksAutomatically] = enabled }
+    }
+
+    suspend fun setAnalyseOnlyWhileCharging(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.analyseOnlyWhileCharging] = enabled }
+    }
+
+    suspend fun setNotifyWhenNewTracksReady(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.notifyWhenNewTracksReady] = enabled }
+    }
+
+    suspend fun setQuietBackgroundMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.quietBackgroundMode] = enabled }
+    }
+
+    suspend fun setOnlineEnrichmentEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.onlineEnrichmentEnabled] = enabled }
+    }
+}

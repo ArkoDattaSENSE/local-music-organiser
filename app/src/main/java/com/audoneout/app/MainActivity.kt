@@ -234,7 +234,14 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                     onAddRule = viewModel::addBlacklistRule,
                     onRuleEnabledChange = viewModel::setBlacklistRuleEnabled,
                     onDeleteRule = viewModel::deleteBlacklistRule,
-                    onRestoreDefaultRules = viewModel::restoreDefaultBlacklist
+                    onRestoreDefaultRules = viewModel::restoreDefaultBlacklist,
+                    onAutomaticLibraryCheckingChange = viewModel::setAutomaticLibraryChecking,
+                    onWifiOnlyOnlineEnrichmentChange = viewModel::setWifiOnlyOnlineEnrichment,
+                    onEnhanceNewTracksAutomaticallyChange = viewModel::setEnhanceNewTracksAutomatically,
+                    onAnalyseOnlyWhileChargingChange = viewModel::setAnalyseOnlyWhileCharging,
+                    onNotifyWhenNewTracksReadyChange = viewModel::setNotifyWhenNewTracksReady,
+                    onQuietBackgroundModeChange = viewModel::setQuietBackgroundMode,
+                    onOnlineEnrichmentEnabledChange = viewModel::setOnlineEnrichmentEnabled
                 )
             }
         }
@@ -482,7 +489,14 @@ private fun SettingsScreen(
     onAddRule: (String) -> Unit,
     onRuleEnabledChange: (Long, Boolean) -> Unit,
     onDeleteRule: (Long) -> Unit,
-    onRestoreDefaultRules: () -> Unit
+    onRestoreDefaultRules: () -> Unit,
+    onAutomaticLibraryCheckingChange: (Boolean) -> Unit,
+    onWifiOnlyOnlineEnrichmentChange: (Boolean) -> Unit,
+    onEnhanceNewTracksAutomaticallyChange: (Boolean) -> Unit,
+    onAnalyseOnlyWhileChargingChange: (Boolean) -> Unit,
+    onNotifyWhenNewTracksReadyChange: (Boolean) -> Unit,
+    onQuietBackgroundModeChange: (Boolean) -> Unit,
+    onOnlineEnrichmentEnabledChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     var typedRule by remember { mutableStateOf("") }
@@ -556,10 +570,14 @@ private fun SettingsScreen(
             )
         }
         SectionTitle("Background Checks")
-        ToggleRow("Automatic library checking", uiState.settings.automaticLibraryChecking)
-        ToggleRow("Wi-Fi only for online enrichment", uiState.settings.wifiOnlyOnlineEnrichment)
-        ToggleRow("Analyse only while charging", uiState.settings.analyseOnlyWhileCharging)
-        ToggleRow("Quiet background mode", uiState.settings.quietBackgroundMode)
+        ToggleRow("Automatic library checking", uiState.settings.automaticLibraryChecking, onAutomaticLibraryCheckingChange)
+        ToggleRow("Enhance new tracks automatically", uiState.settings.enhanceNewTracksAutomatically, onEnhanceNewTracksAutomaticallyChange)
+        ToggleRow("Analyse only while charging", uiState.settings.analyseOnlyWhileCharging, onAnalyseOnlyWhileChargingChange)
+        ToggleRow("Notify when new tracks are ready", uiState.settings.notifyWhenNewTracksReady, onNotifyWhenNewTracksReadyChange)
+        ToggleRow("Quiet background mode", uiState.settings.quietBackgroundMode, onQuietBackgroundModeChange)
+        SectionTitle("Online Enrichment")
+        ToggleRow("Online enrichment enabled", uiState.settings.onlineEnrichmentEnabled, onOnlineEnrichmentEnabledChange)
+        ToggleRow("Wi-Fi only for online enrichment", uiState.settings.wifiOnlyOnlineEnrichment, onWifiOnlyOnlineEnrichmentChange)
     }
 }
 
@@ -741,14 +759,14 @@ private fun BlacklistRuleRow(
 }
 
 @Composable
-private fun ToggleRow(label: String, checked: Boolean) {
+private fun ToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, color = AudOneOutColors.textPrimary)
-        Switch(checked = checked, onCheckedChange = null)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
