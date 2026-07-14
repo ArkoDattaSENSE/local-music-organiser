@@ -3,6 +3,7 @@ package com.audoneout.app
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.audoneout.app.data.AlbumEntity
+import com.audoneout.app.data.AnalysisResultEntity
 import com.audoneout.app.data.ArtistEntity
 import com.audoneout.app.data.FolderBlacklistRuleEntity
 import com.audoneout.app.data.FolderEntity
@@ -35,6 +36,7 @@ data class MainUiState(
     val artists: List<ArtistEntity> = emptyList(),
     val folders: List<FolderEntity> = emptyList(),
     val inbox: List<TrackEntity> = emptyList(),
+    val analysisResults: List<AnalysisResultEntity> = emptyList(),
     val roots: List<MusicRootEntity> = emptyList(),
     val blacklistRules: List<FolderBlacklistRuleEntity> = emptyList(),
     val libraryView: LibraryView = LibraryView.Songs,
@@ -72,6 +74,7 @@ private data class LibraryUiBundle(
     val artists: List<ArtistEntity>,
     val folders: List<FolderEntity>,
     val inbox: List<TrackEntity>,
+    val analysisResults: List<AnalysisResultEntity>,
     val roots: List<MusicRootEntity>
 )
 
@@ -128,8 +131,9 @@ class MainViewModel @Inject constructor(
             val libraryBundle = combine(
                 libraryContent,
                 repository.inbox,
+                repository.analysisResults,
                 repository.roots
-            ) { content, inbox, roots ->
+            ) { content, inbox, analysisResults, roots ->
                 LibraryUiBundle(
                     library = content.library,
                     tracks = content.tracks,
@@ -137,6 +141,7 @@ class MainViewModel @Inject constructor(
                     artists = content.artists,
                     folders = content.folders,
                     inbox = inbox,
+                    analysisResults = analysisResults,
                     roots = roots
                 )
             }
@@ -164,6 +169,7 @@ class MainViewModel @Inject constructor(
                     artists = bundle.artists.filterAndSortArtists(libraryControls.query, libraryControls.sort),
                     folders = bundle.folders.filterAndSortFolders(libraryControls.query, libraryControls.sort),
                     inbox = bundle.inbox,
+                    analysisResults = bundle.analysisResults,
                     roots = bundle.roots,
                     blacklistRules = rules,
                     libraryView = libraryControls.view,
@@ -188,8 +194,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _busy.value = true
             runCatching { repository.scanMediaStore() }
-            val health = repository.currentHealth()
-            _health.value = health
+            _health.value = repository.currentHealth()
             _busy.value = false
         }
     }
@@ -211,6 +216,14 @@ class MainViewModel @Inject constructor(
             _busy.value = true
             runCatching { repository.scanMusicRoot(rootId) }
             _health.value = repository.currentHealth()
+            _busy.value = false
+        }
+    }
+
+    fun runHealthCheck() {
+        viewModelScope.launch {
+            _busy.value = true
+            _health.value = repository.runLibraryDoctor()
             _busy.value = false
         }
     }

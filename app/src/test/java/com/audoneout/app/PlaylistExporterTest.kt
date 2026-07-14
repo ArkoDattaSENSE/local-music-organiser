@@ -29,6 +29,6 @@ class PlaylistExporterTest {
 
         assertTrue(exporter.toM3u8("Mix", listOf(track)).contains("#EXTM3U"))
         assertTrue(exporter.toMigrationCsv(listOf(track)).contains("\"Artist, With Comma\""))
+        assertTrue(exporter.soundiizMigrationGuide().contains("Review unmatched"))
     }
 }
-

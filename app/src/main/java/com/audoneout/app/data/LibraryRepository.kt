@@ -2,6 +2,7 @@ package com.audoneout.app.data
 
 import com.audoneout.app.domain.LibraryHealth
 import com.audoneout.app.domain.ScanProgress
+import com.audoneout.app.doctor.LibraryDoctor
 import com.audoneout.app.scan.BlacklistMatcher
 import com.audoneout.app.scan.MediaStoreScanner
 import javax.inject.Inject
@@ -20,7 +21,8 @@ data class LibraryCounts(
 @Singleton
 class LibraryRepository @Inject constructor(
     private val dao: LibraryDao,
-    private val scanner: MediaStoreScanner
+    private val scanner: MediaStoreScanner,
+    private val doctor: LibraryDoctor
 ) {
     private val _scanProgress = MutableStateFlow(ScanProgress(estimatedRemainingWork = "Ready"))
     val scanProgress: Flow<ScanProgress> = _scanProgress
@@ -39,6 +41,7 @@ class LibraryRepository @Inject constructor(
     val artists: Flow<List<ArtistEntity>> = dao.observeArtists()
     val folders: Flow<List<FolderEntity>> = dao.observeFolders()
     val inbox: Flow<List<TrackEntity>> = dao.observeInbox()
+    val analysisResults: Flow<List<AnalysisResultEntity>> = dao.observeAnalysisResults()
     val roots: Flow<List<MusicRootEntity>> = dao.observeMusicRoots()
     val blacklistRules: Flow<List<FolderBlacklistRuleEntity>> = dao.observeBlacklistRules()
 
@@ -136,6 +139,7 @@ class LibraryRepository @Inject constructor(
             }
         }
         refreshLibraryFacets()
+        runLibraryDoctor()
         dao.finishScanJob(
             scanJobId = jobId,
             status = "Complete",
@@ -155,20 +159,54 @@ class LibraryRepository @Inject constructor(
         val rules = dao.getEnabledBlacklistRules()
         scanRootInternal(root, rules)
         refreshLibraryFacets()
+        runLibraryDoctor()
     }
 
     suspend fun currentHealth(): LibraryHealth {
         val allTracks = dao.getAllTracksOnce()
-        val missing = allTracks.count {
-            it.title.isBlank() || it.artist.isBlank() || it.album.isBlank() ||
-                it.artist.equals("<unknown>", ignoreCase = true)
-        }
-        val duplicateCandidates = allTracks
-            .groupBy { "${it.title.lowercase()}|${it.artist.lowercase()}|${it.album.lowercase()}|${it.durationMs / 1000}" }
-            .count { (_, matches) -> matches.size > 1 }
+        val issues = doctor.analyse(allTracks.filter { it.availability == "Available" })
+        val missing = issues.count { it.type.contains("Unknown", ignoreCase = true) || it.type.contains("Missing", ignoreCase = true) }
+        val duplicateCandidates = issues.count { it.type == "Possible duplicate" }
         val issueCount = missing + duplicateCandidates
         val score = (100 - issueCount.coerceAtMost(100)).coerceIn(0, 100)
         return LibraryHealth(score, issueCount, duplicateCandidates, missing)
+    }
+
+    suspend fun runLibraryDoctor(): LibraryHealth {
+        val availableTracks = dao.getAllTracksOnce().filter { it.availability == "Available" }
+        val issues = doctor.analyse(availableTracks)
+        val now = System.currentTimeMillis()
+        dao.deleteAnalysisResults()
+        dao.insertAnalysisResults(
+            issues.map { issue ->
+                AnalysisResultEntity(
+                    trackId = issue.trackId,
+                    issueType = issue.type,
+                    explanation = issue.explanation,
+                    severity = issue.severity,
+                    createdAtMillis = now
+                )
+            }
+        )
+        val issuesByTrack = issues.groupBy { it.trackId }
+        availableTracks.forEach { track ->
+            val status = when {
+                issuesByTrack[track.id].orEmpty().any { it.type == "Possible duplicate" } -> "PossibleDuplicate"
+                issuesByTrack[track.id].orEmpty().any { it.type.contains("Unknown", ignoreCase = true) || it.type.contains("Missing", ignoreCase = true) } -> "MissingMetadata"
+                issuesByTrack.containsKey(track.id) -> "NeedsReview"
+                else -> "Ready"
+            }
+            dao.updateTrackState(track.id, "Available", status)
+        }
+        val missing = issues.count { it.type.contains("Unknown", ignoreCase = true) || it.type.contains("Missing", ignoreCase = true) }
+        val duplicates = issues.count { it.type == "Possible duplicate" }
+        val issueCount = missing + duplicates
+        return LibraryHealth(
+            score = (100 - issueCount.coerceAtMost(100)).coerceIn(0, 100),
+            issueCount = issueCount,
+            duplicateCandidates = duplicates,
+            missingMetadata = missing
+        )
     }
 
     suspend fun refreshLibraryFacets() {

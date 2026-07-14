@@ -36,9 +36,18 @@ class PlaylistExporter @Inject constructor() {
         }
     }
 
+    fun soundiizMigrationGuide(csvFileName: String = "audoneout-playlist.csv"): String =
+        """
+        Soundiiz handoff:
+        1. Export $csvFileName from AudOneOut.
+        2. Open Soundiiz and choose Import playlist from file.
+        3. Upload the CSV and map Title, Artist, Album, Album Artist, Year, and Duration.
+        4. Review unmatched or low-confidence rows manually before saving to a streaming service.
+        AudOneOut does not modify streaming-service accounts directly.
+        """.trimIndent()
+
     private fun String.csvEscape(): String {
         val escaped = replace("\"", "\"\"")
         return if (escaped.any { it == ',' || it == '\n' || it == '"' }) "\"$escaped\"" else escaped
     }
 }
-

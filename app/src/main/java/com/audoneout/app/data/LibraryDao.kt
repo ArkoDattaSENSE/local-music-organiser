@@ -36,6 +36,9 @@ interface LibraryDao {
     @Query("SELECT * FROM tracks WHERE enhancementStatus != 'Ready' ORDER BY dateAddedSeconds DESC LIMIT :limit")
     fun observeInbox(limit: Int = 100): Flow<List<TrackEntity>>
 
+    @Query("SELECT * FROM analysis_results WHERE ignored = 0 ORDER BY severity DESC, createdAtMillis DESC LIMIT :limit")
+    fun observeAnalysisResults(limit: Int = 200): Flow<List<AnalysisResultEntity>>
+
     @Query("SELECT * FROM folder_blacklist_rules ORDER BY defaultSuggestion DESC, label COLLATE NOCASE")
     fun observeBlacklistRules(): Flow<List<FolderBlacklistRuleEntity>>
 
@@ -92,6 +95,9 @@ interface LibraryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAnalysisResults(results: List<AnalysisResultEntity>)
+
+    @Query("DELETE FROM analysis_results")
+    suspend fun deleteAnalysisResults()
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: PlaylistEntity): Long

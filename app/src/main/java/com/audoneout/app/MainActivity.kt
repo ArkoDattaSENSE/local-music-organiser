@@ -77,6 +77,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.audoneout.app.data.AlbumEntity
+import com.audoneout.app.data.AnalysisResultEntity
 import com.audoneout.app.data.ArtistEntity
 import com.audoneout.app.data.FolderBlacklistRuleEntity
 import com.audoneout.app.data.FolderEntity
@@ -205,7 +206,7 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
             modifier = Modifier.padding(contentPadding)
         ) {
             composable(AppDestination.Home.route) {
-                HomeScreen(uiState, onScan = viewModel::scanLibrary)
+                HomeScreen(uiState, onScan = viewModel::scanLibrary, onHealthCheck = viewModel::runHealthCheck)
             }
             composable(AppDestination.Library.route) {
                 LibraryScreen(
@@ -220,7 +221,7 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                 PlayerScreen(uiState)
             }
             composable(AppDestination.Inbox.route) {
-                InboxScreen(uiState)
+                InboxScreen(uiState, onHealthCheck = viewModel::runHealthCheck)
             }
             composable(AppDestination.Settings.route) {
                 SettingsScreen(
@@ -258,10 +259,15 @@ private fun AudOneOutTopBar(title: String) {
 }
 
 @Composable
-private fun HomeScreen(uiState: MainUiState, onScan: () -> Unit) {
+private fun HomeScreen(uiState: MainUiState, onScan: () -> Unit, onHealthCheck: () -> Unit) {
     ScreenFrame {
         HeroPanel()
         PermissionScanPanel(onScan)
+        CardPanel {
+            Text("Library Doctor", color = AudOneOutColors.textPrimary, fontWeight = FontWeight.Bold)
+            Text("${uiState.analysisResults.size} active findings across metadata, duplicates, artwork, and file health.", color = AudOneOutColors.textSecondary)
+            OutlinedButton(onClick = onHealthCheck, enabled = !uiState.busy) { Text("Run Health Check") }
+        }
         MetricGrid(uiState.library)
         ProgressPanel(uiState)
         SectionTitle("Library Intelligence")
@@ -439,14 +445,25 @@ private fun PlayerScreen(uiState: MainUiState) {
 }
 
 @Composable
-private fun InboxScreen(uiState: MainUiState) {
+private fun InboxScreen(uiState: MainUiState, onHealthCheck: () -> Unit) {
     ScreenFrame {
         SectionTitle("New Music Inbox")
+        CardPanel {
+            Text("Review queue", color = AudOneOutColors.textPrimary, fontWeight = FontWeight.Bold)
+            Text("${uiState.inbox.size} tracks need attention; ${uiState.analysisResults.size} Doctor findings are open.", color = AudOneOutColors.textSecondary)
+            OutlinedButton(onClick = onHealthCheck, enabled = !uiState.busy) { Text("Run Library Doctor") }
+        }
         if (uiState.inbox.isEmpty()) {
             EmptyState(UiIcon.Review, "No tracks need review", "New, low-confidence, duplicate, and missing-metadata tracks will appear here.")
         } else {
             uiState.inbox.forEach { track ->
                 TrackRow(track, subtitle = "${track.enhancementStatus} - ${track.relativePath}")
+            }
+        }
+        if (uiState.analysisResults.isNotEmpty()) {
+            SectionTitle("Doctor Findings")
+            uiState.analysisResults.take(40).forEach { result ->
+                AnalysisResultRow(result)
             }
         }
         FeatureRow(UiIcon.Pipeline, "Enhancement pipeline", "Basic indexing, health checks, discovery tags, and optional online enrichment are staged separately.")
@@ -639,6 +656,21 @@ private fun FolderRow(folder: FolderEntity) {
         UiIcon.Root,
         folder.name,
         "${folder.trackCount} tracks - ${formatBytes(folder.storageBytes)} - ${folder.path}"
+    )
+}
+
+@Composable
+private fun AnalysisResultRow(result: AnalysisResultEntity) {
+    val icon = when {
+        result.issueType.contains("duplicate", ignoreCase = true) -> UiIcon.Duplicate
+        result.issueType.contains("artwork", ignoreCase = true) -> UiIcon.Library
+        result.severity.equals("warning", ignoreCase = true) -> UiIcon.Health
+        else -> UiIcon.Review
+    }
+    FeatureRow(
+        icon,
+        result.issueType,
+        "${result.severity.uppercase()} - ${result.explanation}"
     )
 }
 
