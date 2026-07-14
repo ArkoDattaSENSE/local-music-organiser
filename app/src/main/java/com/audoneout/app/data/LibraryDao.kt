@@ -24,6 +24,15 @@ interface LibraryDao {
     @Query("SELECT * FROM tracks WHERE availability = 'Available' ORDER BY title COLLATE NOCASE LIMIT :limit")
     fun observeTracks(limit: Int = 250): Flow<List<TrackEntity>>
 
+    @Query("SELECT * FROM albums ORDER BY title COLLATE NOCASE LIMIT :limit")
+    fun observeAlbums(limit: Int = 250): Flow<List<AlbumEntity>>
+
+    @Query("SELECT * FROM artists ORDER BY name COLLATE NOCASE LIMIT :limit")
+    fun observeArtists(limit: Int = 250): Flow<List<ArtistEntity>>
+
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE LIMIT :limit")
+    fun observeFolders(limit: Int = 250): Flow<List<FolderEntity>>
+
     @Query("SELECT * FROM tracks WHERE enhancementStatus != 'Ready' ORDER BY dateAddedSeconds DESC LIMIT :limit")
     fun observeInbox(limit: Int = 100): Flow<List<TrackEntity>>
 
@@ -47,6 +56,15 @@ interface LibraryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTracks(tracks: List<TrackEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAlbums(albums: List<AlbumEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertArtists(artists: List<ArtistEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFolders(folders: List<FolderEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertMusicRoot(root: MusicRootEntity): Long
@@ -95,5 +113,27 @@ interface LibraryDao {
 
     @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
     suspend fun deletePlaylistTracks(playlistId: Long)
-}
 
+    @Transaction
+    suspend fun replaceLibraryFacets(
+        albums: List<AlbumEntity>,
+        artists: List<ArtistEntity>,
+        folders: List<FolderEntity>
+    ) {
+        deleteAlbums()
+        deleteArtists()
+        deleteFolders()
+        upsertAlbums(albums)
+        upsertArtists(artists)
+        upsertFolders(folders)
+    }
+
+    @Query("DELETE FROM albums")
+    suspend fun deleteAlbums()
+
+    @Query("DELETE FROM artists")
+    suspend fun deleteArtists()
+
+    @Query("DELETE FROM folders")
+    suspend fun deleteFolders()
+}

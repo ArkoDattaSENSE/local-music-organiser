@@ -87,6 +87,66 @@ data class TrackEntity(
 )
 
 @Entity(
+    tableName = "albums",
+    indices = [Index(value = ["title"]), Index(value = ["artistName"]), Index(value = ["lastAddedSeconds"])]
+)
+data class AlbumEntity(
+    @PrimaryKey val albumKey: String,
+    val title: String,
+    val artistName: String,
+    val trackCount: Int,
+    val durationMs: Long,
+    val storageBytes: Long,
+    val artworkUri: String? = null,
+    val lastAddedSeconds: Long
+)
+
+@Entity(
+    tableName = "artists",
+    indices = [Index(value = ["name"]), Index(value = ["albumCount"]), Index(value = ["trackCount"])]
+)
+data class ArtistEntity(
+    @PrimaryKey val artistKey: String,
+    val name: String,
+    val trackCount: Int,
+    val albumCount: Int,
+    val durationMs: Long
+)
+
+@Entity(
+    tableName = "folders",
+    indices = [Index(value = ["name"]), Index(value = ["included"]), Index(value = ["trackCount"])]
+)
+data class FolderEntity(
+    @PrimaryKey val path: String,
+    val name: String,
+    val trackCount: Int,
+    val storageBytes: Long,
+    val included: Boolean = true,
+    val lastSeenMillis: Long
+)
+
+@Entity(
+    tableName = "listening_events",
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["trackId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["trackId"]), Index(value = ["eventType"]), Index(value = ["occurredAtMillis"])]
+)
+data class ListeningEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val trackId: Long,
+    val eventType: String,
+    val positionMs: Long = 0,
+    val occurredAtMillis: Long
+)
+
+@Entity(
     tableName = "track_availability",
     foreignKeys = [
         ForeignKey(
@@ -243,4 +303,3 @@ data class ExternalMatchEntity(
     val confidence: Float,
     val createdAtMillis: Long
 )
-

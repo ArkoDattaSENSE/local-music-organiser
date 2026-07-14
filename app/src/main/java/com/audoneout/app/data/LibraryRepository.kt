@@ -35,6 +35,9 @@ class LibraryRepository @Inject constructor(
     }
 
     val tracks: Flow<List<TrackEntity>> = dao.observeTracks()
+    val albums: Flow<List<AlbumEntity>> = dao.observeAlbums()
+    val artists: Flow<List<ArtistEntity>> = dao.observeArtists()
+    val folders: Flow<List<FolderEntity>> = dao.observeFolders()
     val inbox: Flow<List<TrackEntity>> = dao.observeInbox()
     val roots: Flow<List<MusicRootEntity>> = dao.observeMusicRoots()
     val blacklistRules: Flow<List<FolderBlacklistRuleEntity>> = dao.observeBlacklistRules()
@@ -82,6 +85,7 @@ class LibraryRepository @Inject constructor(
             _scanProgress.value = result.progress
             dao.upsertTracks(result.tracks)
         }
+        refreshLibraryFacets()
         dao.finishScanJob(
             scanJobId = jobId,
             status = "Complete",
@@ -108,5 +112,9 @@ class LibraryRepository @Inject constructor(
         val score = (100 - issueCount.coerceAtMost(100)).coerceIn(0, 100)
         return LibraryHealth(score, issueCount, duplicateCandidates, missing)
     }
-}
 
+    suspend fun refreshLibraryFacets() {
+        val facets = LibraryFacetBuilder.build(dao.getAllTracksOnce())
+        dao.replaceLibraryFacets(facets.albums, facets.artists, facets.folders)
+    }
+}

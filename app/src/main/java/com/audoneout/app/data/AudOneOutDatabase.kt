@@ -8,6 +8,10 @@ import androidx.room.RoomDatabase
         MusicRootEntity::class,
         FolderBlacklistRuleEntity::class,
         TrackEntity::class,
+        AlbumEntity::class,
+        ArtistEntity::class,
+        FolderEntity::class,
+        ListeningEventEntity::class,
         TrackAvailabilityEntity::class,
         ScanJobEntity::class,
         ScanChangeEntity::class,
@@ -22,10 +26,9 @@ import androidx.room.RoomDatabase
         ExportJobEntity::class,
         ExternalMatchEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AudOneOutDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 }
-

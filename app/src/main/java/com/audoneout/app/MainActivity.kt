@@ -34,10 +34,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -65,7 +67,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.audoneout.app.data.AlbumEntity
+import com.audoneout.app.data.ArtistEntity
 import com.audoneout.app.data.FolderBlacklistRuleEntity
+import com.audoneout.app.data.FolderEntity
 import com.audoneout.app.data.MusicRootEntity
 import com.audoneout.app.data.TrackEntity
 import com.audoneout.app.scan.MediaStoreChangeObserver
@@ -194,7 +199,13 @@ private fun AudOneOutApp(viewModel: MainViewModel = hiltViewModel()) {
                 HomeScreen(uiState, onScan = viewModel::scanLibrary)
             }
             composable(AppDestination.Library.route) {
-                LibraryScreen(uiState)
+                LibraryScreen(
+                    uiState = uiState,
+                    onViewChange = viewModel::setLibraryView,
+                    onSortChange = viewModel::setLibrarySort,
+                    onQueryChange = viewModel::setLibraryQuery,
+                    onToggleGrid = viewModel::toggleLibraryGridMode
+                )
             }
             composable(AppDestination.Player.route) {
                 PlayerScreen(uiState)
@@ -242,16 +253,148 @@ private fun HomeScreen(uiState: MainUiState, onScan: () -> Unit) {
 }
 
 @Composable
-private fun LibraryScreen(uiState: MainUiState) {
+private fun LibraryScreen(
+    uiState: MainUiState,
+    onViewChange: (LibraryView) -> Unit,
+    onSortChange: (LibrarySort) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onToggleGrid: () -> Unit
+) {
     ScreenFrame {
         SectionTitle("Library")
         MetricGrid(uiState.library)
-        if (uiState.tracks.isEmpty()) {
-            EmptyState(UiIcon.EmptyLibrary, "No songs indexed yet", "Grant media access, choose roots, and scan with MediaStore.")
-        } else {
-            uiState.tracks.take(30).forEach { track ->
-                TrackRow(track)
+        LibraryControlsPanel(uiState, onViewChange, onSortChange, onQueryChange, onToggleGrid)
+        when (uiState.libraryView) {
+            LibraryView.Songs -> SongLibrary(uiState)
+            LibraryView.Albums -> AlbumLibrary(uiState)
+            LibraryView.Artists -> ArtistLibrary(uiState)
+            LibraryView.Folders -> FolderLibrary(uiState)
+        }
+    }
+}
+
+@Composable
+private fun LibraryControlsPanel(
+    uiState: MainUiState,
+    onViewChange: (LibraryView) -> Unit,
+    onSortChange: (LibrarySort) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onToggleGrid: () -> Unit
+) {
+    CardPanel {
+        OutlinedTextField(
+            value = uiState.libraryQuery,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search library") }
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            LibraryView.entries.forEach { view ->
+                ToggleTextButton(
+                    text = view.name,
+                    selected = uiState.libraryView == view,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onViewChange(view) }
+                )
             }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf(LibrarySort.Title, LibrarySort.Artist, LibrarySort.Album, LibrarySort.RecentlyAdded).forEach { sort ->
+                ToggleTextButton(
+                    text = sort.label,
+                    selected = uiState.librarySort == sort,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onSortChange(sort) }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ToggleTextButton(
+                text = "Duration",
+                selected = uiState.librarySort == LibrarySort.Duration,
+                modifier = Modifier.weight(1f),
+                onClick = { onSortChange(LibrarySort.Duration) }
+            )
+            ToggleTextButton(
+                text = "Size",
+                selected = uiState.librarySort == LibrarySort.Size,
+                modifier = Modifier.weight(1f),
+                onClick = { onSortChange(LibrarySort.Size) }
+            )
+            ToggleTextButton(
+                text = if (uiState.libraryGridMode) "Grid" else "List",
+                selected = uiState.libraryGridMode,
+                modifier = Modifier.weight(1f),
+                onClick = onToggleGrid
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToggleTextButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val container = if (selected) AudOneOutColors.accentCoral else AudOneOutColors.surfaceAlt
+    val textColor = if (selected) Color.White else AudOneOutColors.textSecondary
+    TextButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(42.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(container)
+    ) {
+        Text(text, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun SongLibrary(uiState: MainUiState) {
+    if (uiState.tracks.isEmpty()) {
+        EmptyState(UiIcon.EmptyLibrary, "No songs indexed yet", "Grant media access, choose roots, and scan with MediaStore.")
+    } else if (uiState.libraryGridMode) {
+        TwoColumnGrid(uiState.tracks.take(40)) { track ->
+            TrackTile(track)
+        }
+    } else {
+        uiState.tracks.take(80).forEach { track ->
+            TrackRow(track)
+        }
+    }
+}
+
+@Composable
+private fun AlbumLibrary(uiState: MainUiState) {
+    if (uiState.albums.isEmpty()) {
+        EmptyState(UiIcon.Library, "No albums yet", "Albums appear after scan facets are built from indexed tracks.")
+    } else if (uiState.libraryGridMode) {
+        TwoColumnGrid(uiState.albums.take(40)) { album ->
+            AlbumTile(album)
+        }
+    } else {
+        uiState.albums.take(80).forEach { album ->
+            AlbumRow(album)
+        }
+    }
+}
+
+@Composable
+private fun ArtistLibrary(uiState: MainUiState) {
+    if (uiState.artists.isEmpty()) {
+        EmptyState(UiIcon.Library, "No artists yet", "Artist summaries appear after your first scan.")
+    } else {
+        uiState.artists.take(80).forEach { artist ->
+            ArtistRow(artist)
+        }
+    }
+}
+
+@Composable
+private fun FolderLibrary(uiState: MainUiState) {
+    if (uiState.folders.isEmpty()) {
+        EmptyState(UiIcon.Root, "No folders yet", "Folder summaries appear after scanning approved music roots.")
+    } else {
+        uiState.folders.take(80).forEach { folder ->
+            FolderRow(folder)
         }
     }
 }
@@ -364,6 +507,69 @@ private fun TrackRow(track: TrackEntity, subtitle: String = "${track.artist} - $
                 Text(subtitle, color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(formatDuration(track.durationMs), color = AudOneOutColors.textMuted)
+        }
+    }
+}
+
+@Composable
+private fun TrackTile(track: TrackEntity) {
+    CardPanel {
+        SymbolBadge(UiIcon.Track, track.title)
+        Text(track.title.ifBlank { track.fileName }, color = AudOneOutColors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(track.artist.ifBlank { "Unknown Artist" }, color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${formatDuration(track.durationMs)} - ${track.format.ifBlank { track.mimeType.substringAfterLast('/') }}", color = AudOneOutColors.textMuted, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+private fun AlbumRow(album: AlbumEntity) {
+    FeatureRow(
+        UiIcon.Library,
+        album.title,
+        "${album.artistName} - ${album.trackCount} tracks - ${formatDuration(album.durationMs)} - ${formatBytes(album.storageBytes)}"
+    )
+}
+
+@Composable
+private fun AlbumTile(album: AlbumEntity) {
+    CardPanel {
+        SymbolBadge(UiIcon.Library, album.title)
+        Text(album.title, color = AudOneOutColors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(album.artistName, color = AudOneOutColors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${album.trackCount} tracks - ${formatBytes(album.storageBytes)}", color = AudOneOutColors.textMuted, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+private fun ArtistRow(artist: ArtistEntity) {
+    FeatureRow(
+        UiIcon.NewMusic,
+        artist.name,
+        "${artist.trackCount} tracks - ${artist.albumCount} albums - ${formatDuration(artist.durationMs)}"
+    )
+}
+
+@Composable
+private fun FolderRow(folder: FolderEntity) {
+    FeatureRow(
+        UiIcon.Root,
+        folder.name,
+        "${folder.trackCount} tracks - ${formatBytes(folder.storageBytes)} - ${folder.path}"
+    )
+}
+
+@Composable
+private fun <T> TwoColumnGrid(items: List<T>, itemContent: @Composable (T) -> Unit) {
+    items.chunked(2).forEach { rowItems ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            rowItems.forEach { item ->
+                Box(modifier = Modifier.weight(1f)) {
+                    itemContent(item)
+                }
+            }
+            if (rowItems.size == 1) {
+                Box(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -641,6 +847,32 @@ private fun formatDuration(durationMs: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val units = listOf("B", "KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var unitIndex = 0
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex += 1
+    }
+    return if (unitIndex == 0) {
+        "${bytes} ${units[unitIndex]}"
+    } else {
+        "%.1f %s".format(value, units[unitIndex])
+    }
+}
+
+private val LibrarySort.label: String
+    get() = when (this) {
+        LibrarySort.Title -> "Title"
+        LibrarySort.Artist -> "Artist"
+        LibrarySort.Album -> "Album"
+        LibrarySort.RecentlyAdded -> "Added"
+        LibrarySort.Duration -> "Duration"
+        LibrarySort.Size -> "Size"
+    }
 
 private object AudOneOutColors {
     val background = Color(0xFF101113)
