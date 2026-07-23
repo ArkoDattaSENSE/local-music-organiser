@@ -12,6 +12,8 @@ import androidx.room.RoomDatabase
         ArtistEntity::class,
         FolderEntity::class,
         ListeningEventEntity::class,
+        FavoriteTrackEntity::class,
+        RadioStationEntity::class,
         TrackAvailabilityEntity::class,
         ScanJobEntity::class,
         ScanChangeEntity::class,
@@ -19,6 +21,7 @@ import androidx.room.RoomDatabase
         EnrichedMetadataEntity::class,
         UserConfirmedMetadataEntity::class,
         MetadataSuggestionEntity::class,
+        MetadataWritebackEntity::class,
         AnalysisResultEntity::class,
         PlaylistEntity::class,
         PlaylistTrackCrossRef::class,
@@ -26,7 +29,7 @@ import androidx.room.RoomDatabase
         ExportJobEntity::class,
         ExternalMatchEntity::class
     ],
-    version = 2,
+    version = 7,
     exportSchema = true
 )
 abstract class AudOneOutDatabase : RoomDatabase() {

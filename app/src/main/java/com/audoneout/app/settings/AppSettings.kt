@@ -17,11 +17,14 @@ data class SettingsState(
     val automaticLibraryChecking: Boolean = true,
     val checkFrequency: String = "Daily",
     val wifiOnlyOnlineEnrichment: Boolean = true,
-    val enhanceNewTracksAutomatically: Boolean = false,
+    val enhanceNewTracksAutomatically: Boolean = true,
     val analyseOnlyWhileCharging: Boolean = true,
     val notifyWhenNewTracksReady: Boolean = true,
     val quietBackgroundMode: Boolean = false,
-    val onlineEnrichmentEnabled: Boolean = false
+    val onlineEnrichmentEnabled: Boolean = false,
+    val lastFmEnabled: Boolean = false,
+    val lastFmUsername: String = "",
+    val lastFmApiKey: String = ""
 )
 
 @Singleton
@@ -37,6 +40,9 @@ class AppSettings @Inject constructor(
         val notifyWhenNewTracksReady = booleanPreferencesKey("notify_when_new_tracks_ready")
         val quietBackgroundMode = booleanPreferencesKey("quiet_background_mode")
         val onlineEnrichmentEnabled = booleanPreferencesKey("online_enrichment_enabled")
+        val lastFmEnabled = booleanPreferencesKey("lastfm_enabled")
+        val lastFmUsername = stringPreferencesKey("lastfm_username")
+        val lastFmApiKey = stringPreferencesKey("lastfm_api_key")
     }
 
     val state: Flow<SettingsState> = context.dataStore.data.map { prefs ->
@@ -44,16 +50,23 @@ class AppSettings @Inject constructor(
             automaticLibraryChecking = prefs[Keys.automaticLibraryChecking] ?: true,
             checkFrequency = prefs[Keys.checkFrequency] ?: "Daily",
             wifiOnlyOnlineEnrichment = prefs[Keys.wifiOnlyOnlineEnrichment] ?: true,
-            enhanceNewTracksAutomatically = prefs[Keys.enhanceNewTracksAutomatically] ?: false,
+            enhanceNewTracksAutomatically = prefs[Keys.enhanceNewTracksAutomatically] ?: true,
             analyseOnlyWhileCharging = prefs[Keys.analyseOnlyWhileCharging] ?: true,
             notifyWhenNewTracksReady = prefs[Keys.notifyWhenNewTracksReady] ?: true,
             quietBackgroundMode = prefs[Keys.quietBackgroundMode] ?: false,
-            onlineEnrichmentEnabled = prefs[Keys.onlineEnrichmentEnabled] ?: false
+            onlineEnrichmentEnabled = prefs[Keys.onlineEnrichmentEnabled] ?: false,
+            lastFmEnabled = prefs[Keys.lastFmEnabled] ?: false,
+            lastFmUsername = prefs[Keys.lastFmUsername].orEmpty(),
+            lastFmApiKey = prefs[Keys.lastFmApiKey].orEmpty()
         )
     }
 
     suspend fun setAutomaticLibraryChecking(enabled: Boolean) {
         context.dataStore.edit { it[Keys.automaticLibraryChecking] = enabled }
+    }
+
+    suspend fun setCheckFrequency(frequency: String) {
+        context.dataStore.edit { it[Keys.checkFrequency] = if (frequency == "Weekly") "Weekly" else "Daily" }
     }
 
     suspend fun setWifiOnlyOnlineEnrichment(enabled: Boolean) {
@@ -78,5 +91,17 @@ class AppSettings @Inject constructor(
 
     suspend fun setOnlineEnrichmentEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.onlineEnrichmentEnabled] = enabled }
+    }
+
+    suspend fun setLastFmEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.lastFmEnabled] = enabled }
+    }
+
+    suspend fun setLastFmCredentials(username: String, apiKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.lastFmUsername] = username.trim()
+            prefs[Keys.lastFmApiKey] = apiKey.trim()
+            prefs[Keys.lastFmEnabled] = username.isNotBlank() && apiKey.isNotBlank()
+        }
     }
 }

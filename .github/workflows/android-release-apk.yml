@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to create or update
         required: true
-        default: v0.1.0-debug
+        default: v0.6.0-debug
       prerelease:
         description: Mark release as prerelease
         required: true
@@ -14,17 +14,29 @@ on:
   push:
     tags:
       - "v*"
+  workflow_run:
+    workflows: ["Android Build"]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   release-apk:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -37,6 +49,9 @@ jobs:
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
+
+      - name: Run Android lint
+        run: ./gradlew lintDebug
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug
@@ -60,19 +75,28 @@ jobs:
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n 1)"
+            if [[ -z "$version_name" ]]; then
+              echo "Could not read versionName from app/build.gradle.kts" >&2
+              exit 1
+            fi
+            echo "tag=v${version_name}-debug" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           name: AudOneOut ${{ steps.release.outputs.tag }}
           body: |
-            Debug APK for AudOneOut.
+            AudOneOut is a local-music intelligence and discovery companion.
+
+            This build adds explicit verified file-tag writeback, local metadata enrichment, recent-scrobble Last.fm recommendations, Speed Dial, local and online radio handoffs, YouTube Music search links, playlist import/export, and resilient automatic library checks.
 
             This APK is intended for device testing and is not a Play Store production signing artifact.
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease == 'true' || true }}
           files: ${{ steps.apk.outputs.path }}
-

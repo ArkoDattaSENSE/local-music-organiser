@@ -1,7 +1,9 @@
 package com.audoneout.app.domain
 
 data class Track(
+    val libraryId: Long = 0,
     val mediaStoreId: Long,
+    val volumeName: String = "external_primary",
     val contentUri: String,
     val title: String,
     val artist: String,
@@ -33,6 +35,7 @@ data class ScanProgress(
     val tracksFound: Int = 0,
     val newTracks: Int = 0,
     val updatedTracks: Int = 0,
+    val missingTracks: Int = 0,
     val excludedTracks: Int = 0,
     val failedTracks: Int = 0,
     val estimatedRemainingWork: String = "Idle",
@@ -50,7 +53,8 @@ data class PlaylistRules(
     val preferUnplayed: Boolean = false,
     val avoidArtistRepetitions: Boolean = false,
     val energyRange: IntRange? = null,
-    val familiarityLevel: String? = null
+    val familiarityLevel: String? = null,
+    val addedWithinDays: Int? = null
 )
 
 data class PlaylistCandidate(
@@ -89,4 +93,3 @@ enum class EnhancementStatus {
     Excluded,
     Failed
 }
-

@@ -1,5 +1,6 @@
 package com.audoneout.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -38,7 +39,7 @@ data class FolderBlacklistRuleEntity(
 @Entity(
     tableName = "tracks",
     indices = [
-        Index(value = ["mediaStoreId"], unique = true),
+        Index(value = ["volumeName", "mediaStoreId"], unique = true),
         Index(value = ["contentUri"], unique = true),
         Index(value = ["relativePath"]),
         Index(value = ["rootId"]),
@@ -48,12 +49,14 @@ data class FolderBlacklistRuleEntity(
         Index(value = ["artist"]),
         Index(value = ["album"]),
         Index(value = ["genre"]),
-        Index(value = ["language"])
+        Index(value = ["language"]),
+        Index(value = ["discoveryTags"])
     ]
 )
 data class TrackEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mediaStoreId: Long,
+    @ColumnInfo(defaultValue = "'external_primary'") val volumeName: String = "external_primary",
     val contentUri: String,
     val title: String,
     val artist: String,
@@ -147,6 +150,38 @@ data class ListeningEventEntity(
 )
 
 @Entity(
+    tableName = "favorite_tracks",
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["trackId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["trackId"], unique = true), Index(value = ["position"])]
+)
+data class FavoriteTrackEntity(
+    @PrimaryKey val trackId: Long,
+    val position: Int,
+    val addedAtMillis: Long
+)
+
+@Entity(
+    tableName = "radio_stations",
+    indices = [Index(value = ["streamUrl"], unique = true), Index(value = ["lastPlayedAtMillis"])]
+)
+data class RadioStationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val streamUrl: String,
+    val homepageUrl: String = "",
+    val artworkUrl: String = "",
+    val source: String = "Manual",
+    val lastPlayedAtMillis: Long = 0
+)
+
+@Entity(
     tableName = "track_availability",
     foreignKeys = [
         ForeignKey(
@@ -223,8 +258,15 @@ data class UserConfirmedMetadataEntity(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
+    val albumArtist: String? = null,
     val genre: String? = null,
+    val year: Int? = null,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
     val language: String? = null,
+    val mood: String? = null,
+    val energy: Int? = null,
+    val discoveryTags: String? = null,
     val updatedAtMillis: Long
 )
 
@@ -238,6 +280,28 @@ data class MetadataSuggestionEntity(
     val confidence: Float,
     val status: String = "Pending",
     val createdAtMillis: Long
+)
+
+@Entity(
+    tableName = "metadata_writebacks",
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["trackId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["status"])]
+)
+data class MetadataWritebackEntity(
+    @PrimaryKey val trackId: Long,
+    val status: String = "Pending",
+    val requestedAtMillis: Long,
+    val completedAtMillis: Long? = null,
+    val writtenFields: String = "",
+    val catalogOnlyFields: String = "",
+    val errorMessage: String = ""
 )
 
 @Entity(tableName = "analysis_results", indices = [Index(value = ["trackId"]), Index(value = ["issueType"])])

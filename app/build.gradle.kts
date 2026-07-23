@@ -13,8 +13,8 @@ android {
         applicationId = "com.audoneout.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 6
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -46,6 +46,7 @@ android {
 
     kotlinOptions {
         jvmTarget = "11"
+        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 
     buildFeatures {
@@ -88,15 +89,16 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.5.0")
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-session:1.2.1")
-
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-android-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.0.0")
     implementation("androidx.hilt:hilt-work:1.0.0")
     kapt("androidx.hilt:hilt-compiler:1.0.0")
+    implementation("io.github.kyant0:taglib:1.0.6") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+    }
 
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")

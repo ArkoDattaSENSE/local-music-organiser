@@ -56,5 +56,5 @@ object LibraryFacetBuilder {
 
 private fun String.normalizeFacetKey(): String =
     lowercase()
-        .replace(Regex("[^a-z0-9]+"), " ")
+        .replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ")
         .trim()

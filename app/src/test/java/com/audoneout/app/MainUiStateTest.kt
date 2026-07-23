@@ -9,6 +9,6 @@ class MainUiStateTest {
         val state = MainUiState()
 
         assertEquals(0, state.library.trackCount)
-        assertEquals("Nothing playing", state.nowPlayingTitle)
+        assertEquals(emptyList<Long>(), state.favorites.map { it.id })
     }
 }

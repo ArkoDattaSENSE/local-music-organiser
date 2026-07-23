@@ -3,6 +3,8 @@ name: Android Build
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -25,6 +27,9 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
+      - name: Run Android lint
+        run: ./gradlew lintDebug
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug
 
@@ -44,4 +49,3 @@ jobs:
         with:
           name: audoneout-debug-apk
           path: ${{ steps.apk.outputs.path }}
-
